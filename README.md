@@ -8,7 +8,7 @@ You can use the `$fieldGrammar` parameter to supply a filter for the PDFs that y
 ```php
 <?php
 //::::::::::::::  SET STATIC VARIABLES   ::::::::::::::
-$server = '####'; // 'apple'
+$server = '####'; // 'apple.iformbuilder.com' or 'apple.zerionsandbox.com'
 $client = '####'; // 'abc123'
 $secret = '####'; // 'abc123'
 $profileId = '####'; // '123456'
