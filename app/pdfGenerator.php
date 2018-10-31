@@ -9,7 +9,7 @@ use iForm\Auth\iFormTokenResolver;
 
 //:::::::::::::: Define the environment where we obtain an access token ::::::::::::::
 
-$tokenUrl = 'https://' . $server . '.iformbuilder.com/exzact/api/oauth/token';
+$tokenUrl = 'https://' . $server . '/exzact/api/oauth/token';
 
 //:::::::::::::: Need to get the name of the active page so we can use it later in the PDF request and to create the directories. ::::::::::::::
 
@@ -23,7 +23,7 @@ $token = $tokenFetcher->getToken();
 echo "Active Page ID: ".$activePage."\r\n";
 
 $ch = curl_init();
-curl_setopt($ch, CURLOPT_URL, "https://" . $server . ".iformbuilder.com/exzact/api/v60/profiles/$profileId/pages/$activePage");
+curl_setopt($ch, CURLOPT_URL, "https://" . $server . "/exzact/api/v60/profiles/$profileId/pages/$activePage");
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
 curl_setopt($ch, CURLOPT_HEADER, FALSE);
 
@@ -45,7 +45,7 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, array(
 
 
   //:::::::::::::: Send one request to determine total number of records in the response header (Total-Count) ::::::::::::::
-  $recordListUrl = "https://" . $server . ".iformbuilder.com/exzact/api/v60/profiles/$profileId/pages/$activePage/records?$fieldGrammar&limit=1&access_token=" . $token;
+  $recordListUrl = "https://" . $server . "/exzact/api/v60/profiles/$profileId/pages/$activePage/records?$fieldGrammar&limit=1&access_token=" . $token;
 
   // Parse the response headers and figure out how many records we need to process
   $recordRequestHeaders = (get_headers($recordListUrl,1));
@@ -63,7 +63,7 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, array(
 
     //:::::::::::::: Fetch the most recent list of records for the active form ::::::::::::::
     $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, "https://" . $server . ".iformbuilder.com/exzact/api/v60/profiles/$profileId/pages/$activePage/records?$fieldGrammar&offset=$offset&limit=$recordLimit");
+    curl_setopt($ch, CURLOPT_URL, "https://" . $server . "/exzact/api/v60/profiles/$profileId/pages/$activePage/records?$fieldGrammar&offset=$offset&limit=$recordLimit");
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
     curl_setopt($ch, CURLOPT_HEADER, FALSE);
 
@@ -87,7 +87,7 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, array(
 
       // Make the request for a PDF here.
       $ch = curl_init();
-      curl_setopt($ch, CURLOPT_URL, "https://" . $server . ".iformbuilder.com/exzact/dataPDF.php?TABLE_NAME=_data$profileId$activePageName&ID=$activeRecord&PAGE_ID=$activePage&USERNAME=$username&PASSWORD=$password");
+      curl_setopt($ch, CURLOPT_URL, "https://" . $server . "/exzact/dataPDF.php?TABLE_NAME=_data$profileId$activePageName&ID=$activeRecord&PAGE_ID=$activePage&USERNAME=$username&PASSWORD=$password");
       curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
       curl_setopt($ch, CURLOPT_HEADER, FALSE);
 
