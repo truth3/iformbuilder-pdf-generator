@@ -17,3 +17,8 @@ $fieldGrammar = 'fields=id'; // 'fields=country(=%22USA%22)'
 $username = '####'; // 'testuser'
 $password = '####'; // 'testpassword'
 ?>
+```
+
+Check out the getting started video below for a crash course on getting setup.
+
+https://youtu.be/vZwbytNYiDk
