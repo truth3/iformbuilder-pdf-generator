@@ -16,6 +16,19 @@ $time_start = microtime(true);
 
 foreach($pageArray as $activePage) {
 
+  // We need to get all of the details for the page (ID, Name of PDF File, Filter Grammar)
+  $pageDetails = explode(';',$activePage);
+  $activePageId = $pageDetails[0];
+  $activePageFileName = $pageDetails[1];
+  $activePageFieldGrammar = $pageDetails[2];
+
+  if ($activePageFileName==null) {
+    $activePageFileName = 'id';
+  }
+  if ($activePageFieldGrammar==null) {
+    $activePageFieldGrammar = 'fields=id';
+  }
+
 // Set a count so we can track how many records get created for each form
 $currentFormRecordCount = 0;
 
@@ -24,10 +37,10 @@ $currentFormRecordCount = 0;
 $tokenFetcher = new iFormTokenResolver($tokenUrl, $client, $secret);
 $token = $tokenFetcher->getToken();
 
-echo "Active Page ID: ".$activePage."\r\n";
+echo "Active Page ID: ".$activePageId."\r\n";
 
 $ch = curl_init();
-curl_setopt($ch, CURLOPT_URL, "https://" . $server . "/exzact/api/v60/profiles/$profileId/pages/$activePage");
+curl_setopt($ch, CURLOPT_URL, "https://" . $server . "/exzact/api/v60/profiles/$profileId/pages/$activePageId");
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
 curl_setopt($ch, CURLOPT_HEADER, FALSE);
 
@@ -49,7 +62,7 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, array(
 
 
   //:::::::::::::: Send one request to determine total number of records in the response header (Total-Count) ::::::::::::::
-  $recordListUrl = "https://" . $server . "/exzact/api/v60/profiles/$profileId/pages/$activePage/records?$fieldGrammar&limit=1&access_token=" . $token;
+  $recordListUrl = "https://" . $server . "/exzact/api/v60/profiles/$profileId/pages/$activePageId/records?$activePageFieldGrammar&limit=1&access_token=" . $token;
 
   // Parse the response headers and figure out how many records we need to process
   $recordRequestHeaders = (get_headers($recordListUrl,1));
@@ -71,7 +84,7 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, array(
 
     //:::::::::::::: Fetch the most recent list of records for the active form ::::::::::::::
     $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, "https://" . $server . "/exzact/api/v60/profiles/$profileId/pages/$activePage/records?$fieldGrammar&offset=$offset&limit=$recordLimit");
+    curl_setopt($ch, CURLOPT_URL, "https://" . $server . "/exzact/api/v60/profiles/$profileId/pages/$activePageId/records?$activePageFieldGrammar&offset=$offset&limit=$recordLimit");
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
     curl_setopt($ch, CURLOPT_HEADER, FALSE);
 
@@ -87,20 +100,23 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, array(
 
       // Get the JSON response into an array so we can loop through it.
       $activeRecordJson = json_decode($response,true);
+
       // Track the total number of PDFs we create accross all forms.
       $totalRecordCount = $totalRecordCount+(sizeof($activeRecordJson));
 
       // For each record we need to call the iFormBuilder PDF resource and pass in the relevant parameters
       foreach($activeRecordJson as $activeRecord) {
-      $activeRecord = $activeRecord['id'];
-      print_r("Downloading Record ID: " . $activeRecord . "\r\n");
+
+        $activeRecordId = $activeRecord['id'];
+        $activeRecordName = $activeRecord[$activePageFileName];
+        print_r("Downloading Record: " . $activeRecordName . "\r\n");
 
       // Increment the record count
       $currentFormRecordCount = $currentFormRecordCount+1;
 
       // Make the request for a PDF here.
       $ch = curl_init();
-      curl_setopt($ch, CURLOPT_URL, "https://" . $server . "/exzact/dataPDF.php?TABLE_NAME=_data$profileId$activePageName&ID=$activeRecord&PAGE_ID=$activePage&USERNAME=$username&PASSWORD=$password");
+      curl_setopt($ch, CURLOPT_URL, "https://" . $server . "/exzact/dataPDF.php?TABLE_NAME=_data$profileId$activePageName&ID=$activeRecordId&PAGE_ID=$activePageId&USERNAME=$username&PASSWORD=$password");
       curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
       curl_setopt($ch, CURLOPT_HEADER, FALSE);
 
@@ -110,7 +126,7 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, array(
         curl_close($ch);
 
         // Save the PDF that we just requested in the proper directory
-        file_put_contents ("../$activePageLabel/$activeRecord.pdf" ,$response);
+        file_put_contents ("../$activePageLabel/$activeRecordName.pdf" ,$response);
       }
 
       // Add to the offset to keep working through the records not yet processed
