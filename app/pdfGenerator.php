@@ -10,10 +10,14 @@ use iForm\Auth\iFormTokenResolver;
 //:::::::::::::: Define the environment where we obtain an access token ::::::::::::::
 
 $tokenUrl = 'https://' . $server . '/exzact/api/oauth/token';
+$time_start = microtime(true);
 
 //:::::::::::::: Need to get the name of the active page so we can use it later in the PDF request and to create the directories. ::::::::::::::
 
 foreach($pageArray as $activePage) {
+
+// Set a count so we can track how many records get created for each form
+$currentFormRecordCount = 0;
 
 //::::::::::::::  FETCH ACCESS TOKEN   ::::::::::::::
 // Couldn't wrap method call in PHP 5.3 so this has to become two separate variables
@@ -61,6 +65,10 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, array(
 
   for ($i=0;$i<$timesToRun;$i++)  {
 
+    // Get a fresh access token because it can expire if there are thousands of PDFs to generate
+    $tokenFetcher = new iFormTokenResolver($tokenUrl, $client, $secret);
+    $token = $tokenFetcher->getToken();
+
     //:::::::::::::: Fetch the most recent list of records for the active form ::::::::::::::
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, "https://" . $server . "/exzact/api/v60/profiles/$profileId/pages/$activePage/records?$fieldGrammar&offset=$offset&limit=$recordLimit");
@@ -79,11 +87,16 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, array(
 
       // Get the JSON response into an array so we can loop through it.
       $activeRecordJson = json_decode($response,true);
+      // Track the total number of PDFs we create accross all forms.
+      $totalRecordCount = $totalRecordCount+(sizeof($activeRecordJson));
 
       // For each record we need to call the iFormBuilder PDF resource and pass in the relevant parameters
       foreach($activeRecordJson as $activeRecord) {
       $activeRecord = $activeRecord['id'];
       print_r("Downloading Record ID: " . $activeRecord . "\r\n");
+
+      // Increment the record count
+      $currentFormRecordCount = $currentFormRecordCount+1;
 
       // Make the request for a PDF here.
       $ch = curl_init();
@@ -102,7 +115,13 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, array(
 
       // Add to the offset to keep working through the records not yet processed
       $offset=($i+1)*$recordLimit;
-      echo "Records Completed: " . $offset . "\r\n\r\n";
+      echo "Number of records completed for current form: " . $currentFormRecordCount . "\r\n\r\n";
     }
 }
+$time_end = microtime(true);
+//dividing with 60 will give the execution time in minutes otherwise seconds
+$execution_time = ($time_end - $time_start)/60;
+
+echo "Total number of records downloaded accross all forms: " . $totalRecordCount . "\r\n";
+echo "This tool just saved about " . round($execution_time) . " minutes\r\n";
 ?>
