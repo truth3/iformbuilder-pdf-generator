@@ -12,8 +12,7 @@ $server = '####'; // 'apple.iformbuilder.com' or 'apple.zerionsandbox.com'
 $client = '####'; // 'abc123'
 $secret = '####'; // 'abc123'
 $profileId = '####'; // '123456'
-$pageArray = ["####","####"]; // '123456'
-$fieldGrammar = 'fields=id'; // 'fields=country(=%22USA%22)'
+$pageArray = ["####;####;####","####;####;####"]; // '123456;company_name;fields=id,company_name'
 $username = '####'; // 'testuser'
 $password = '####'; // 'testpassword'
 ?>
@@ -22,3 +21,8 @@ $password = '####'; // 'testpassword'
 Check out the getting started video below for a crash course on getting setup.
 
 https://youtu.be/vZwbytNYiDk
+
+When the utility finishes you will see a summary count of all the files that were created along with the total amount of time saved. The example below took just over 12 hours and downloaded 27,000 different records.
+
+![Summary view after script completion](https://user-images.githubusercontent.com/7986768/49557947-599e3e00-f8d7-11e8-9fda-89f8d44e9353.png)
+
