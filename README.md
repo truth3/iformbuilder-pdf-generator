@@ -6,7 +6,9 @@ The keys.php file should look like the example below. The server name, client ke
 The `$pageArray` variable contains three values separated by a semi-colon. 
 
 The first value should be the **page_id** of the form you want to create PDFs for. 
+
 The second value should be a **data column name** within the form. The value in this column will be used to name the PDF for the given record. 
+
 The third value should be valid field grammar which will be used to filter the records for the given **page_id**. Make sure to URLEncode the filter you pass in.
 
 ```php
