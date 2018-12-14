@@ -3,7 +3,11 @@ A simple utility designed to loop through a number of forms, generating a PDF an
 
 The keys.php file should look like the example below. The server name, client key and secret needs to be associated to a user which has read access for the list of forms.
 
-You can use the `$fieldGrammar` parameter to supply a filter for the PDFs that you want. The filter will be reused for all the forms defined in the page array. Make sure to URLEncode the filter you pass in.
+The `$pageArray` variable contains three values separated by a semi-colon. 
+
+The first value should be the **page_id** of the form you want to create PDFs for. 
+The second value should be a **data column name** within the form. The value in this column will be used to name the PDF for the given record. 
+The third value should be valid field grammar which will be used to filter the records for the given **page_id**. Make sure to URLEncode the filter you pass in.
 
 ```php
 <?php
