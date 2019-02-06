@@ -36,7 +36,6 @@ $currentFormRecordCount = 0;
 // Couldn't wrap method call in PHP 5.3 so this has to become two separate variables
 $tokenFetcher = new iFormTokenResolver($tokenUrl, $client, $secret);
 $token = $tokenFetcher->getToken();
-echo $token;
 
 echo "Active Page ID: ".$activePageId."\r\n";
 
