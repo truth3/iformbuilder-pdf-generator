@@ -4,7 +4,7 @@ header('Access-Control-Allow-Methods: POST, PUT');
 header("Access-Control-Allow-Headers: X-Requested-With");
 
 require_once "../auth/iFormTokenResolver.php";
-require_once "../auth/keys2.php";
+require_once "../auth/keys.php";
 use iForm\Auth\iFormTokenResolver;
 
 //:::::::::::::: Define the environment where we obtain an access token ::::::::::::::
@@ -126,7 +126,7 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, array(
             echo 'Curl error: '.curl_error($ch);
         curl_close($ch);
 
-        // Save the PDF that we just requested in the proper directory 
+        // Save the PDF that we just requested in the proper directory
         if ($activePageFileName!='id') {
         file_put_contents ("../$activePageName/$activeRecordName($activeRecordId).pdf" ,$response);
       } else
