@@ -58,7 +58,7 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, array(
   $activePageLabel = $activePageJson["label"];
   $activePageName = $activePageJson["name"];
   echo "Active Page Label: ".$activePageLabel."\r\n";
-  mkdir("../$activePageLabel");
+  mkdir("../$activePageName");
 
 
   //:::::::::::::: Send one request to determine total number of records in the response header (Total-Count) ::::::::::::::
@@ -126,7 +126,10 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, array(
         curl_close($ch);
 
         // Save the PDF that we just requested in the proper directory
-        file_put_contents ("../$activePageLabel/$activeRecordName.pdf" ,$response);
+        if ($activePageFileName!='id') {
+        file_put_contents ("../$activePageName/$activeRecordName($activeRecordId).pdf" ,$response);
+      } else
+        file_put_contents ("../$activePageName/$activeRecordName.pdf" ,$response);
       }
 
       // Add to the offset to keep working through the records not yet processed
