@@ -4,7 +4,7 @@ header('Access-Control-Allow-Methods: POST, PUT');
 header("Access-Control-Allow-Headers: X-Requested-With");
 
 require_once "../auth/iFormTokenResolver.php";
-require_once "../auth/keys.php";
+require_once "../auth/keys2.php";
 use iForm\Auth\iFormTokenResolver;
 
 //:::::::::::::: Define the environment where we obtain an access token ::::::::::::::
@@ -36,6 +36,7 @@ $currentFormRecordCount = 0;
 // Couldn't wrap method call in PHP 5.3 so this has to become two separate variables
 $tokenFetcher = new iFormTokenResolver($tokenUrl, $client, $secret);
 $token = $tokenFetcher->getToken();
+echo $token;
 
 echo "Active Page ID: ".$activePageId."\r\n";
 
@@ -58,7 +59,7 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, array(
   $activePageLabel = $activePageJson["label"];
   $activePageName = $activePageJson["name"];
   echo "Active Page Label: ".$activePageLabel."\r\n";
-  mkdir("../$activePageLabel");
+  mkdir("../$activePageName");
 
 
   //:::::::::::::: Send one request to determine total number of records in the response header (Total-Count) ::::::::::::::
@@ -125,8 +126,11 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, array(
             echo 'Curl error: '.curl_error($ch);
         curl_close($ch);
 
-        // Save the PDF that we just requested in the proper directory
-        file_put_contents ("../$activePageLabel/$activeRecordName.pdf" ,$response);
+        // Save the PDF that we just requested in the proper directory 
+        if ($activePageFileName!='id') {
+        file_put_contents ("../$activePageName/$activeRecordName($activeRecordId).pdf" ,$response);
+      } else
+        file_put_contents ("../$activePageName/$activeRecordName.pdf" ,$response);
       }
 
       // Add to the offset to keep working through the records not yet processed
