@@ -134,7 +134,7 @@ curl_setopt($ch, CURLOPT_HEADER, FALSE);
       // For each record we need to call the iFormBuilder PDF resource and pass in the relevant parameters
       foreach($activeRecordJson as $activeRecord) {
         $activeRecordId = $activeRecord['id'];
-        $activeRecordName = mb_ereg_replace("([^\w\s\d\-_~,;\[\]\(\).])", '-', $activeRecord[$activePageFileName]);
+        $activeRecordName = preg_replace("([^\w\s\d\-_~,;\[\]\(\).])", '-', $activeRecord[$activePageFileName]);
 
         $accessCheckUrl = "https://" . $server . "/exzact/dataPDF.php?TABLE_NAME=_data$profileId$activePageName&ID=$activeRecordId&PAGE_ID=$activePageId&USERNAME=$username&PASSWORD=$password";
 
