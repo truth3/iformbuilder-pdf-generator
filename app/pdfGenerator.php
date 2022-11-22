@@ -17,11 +17,12 @@ $totalRecordCount = 0;
 
 foreach($pageArray as $activePage) {
 
-  // We need to get separate all of the details for the page (ID, Name of PDF File, Filter Grammar)
+  // We need to get separate all of the details for the page (ID, Name of PDF File, Separator for Name, Filter Grammar)
   $pageDetails = explode(';',$activePage);
   $activePageId = $pageDetails[0];
   $activePageFileName = $pageDetails[1];
-  $activePageFieldGrammar = $pageDetails[2];
+  $activePageFileNameSeparator = $pageDetails[2];
+  $activePageFieldGrammar = $pageDetails[3];
 
   // Check to see whether the structure of the pageArray has all values set, and if not, set the defaults for name and filtering
   if ($activePageFileName==null) {
@@ -134,7 +135,17 @@ curl_setopt($ch, CURLOPT_HEADER, FALSE);
       // For each record we need to call the iFormBuilder PDF resource and pass in the relevant parameters
       foreach($activeRecordJson as $activeRecord) {
         $activeRecordId = $activeRecord['id'];
-        $activeRecordName = preg_replace("([^\w\s\d\-_~,;\[\]\(\).])", '-', $activeRecord[$activePageFileName]);
+
+        // We need to handle multiple columns being used for the record name, so explode the list.
+          $activePageFileNameDetails = explode('-',$activePageFileName);
+
+          foreach($activePageFileNameDetails as $activePageFileName) {
+            // We need to clean up special charachters in the data being returned to make it safe for naming a file.
+            $activeRecordName .= preg_replace("([^\w\s\d\-_~,;\[\]\(\).])", '-' , $activeRecord[$activePageFileName]) . $activePageFileNameSeparator ;
+            print_r($activeRecordName);
+          }
+
+        // $activeRecordName = preg_replace("([^\w\s\d\-_~,;\[\]\(\).])", '-', $activeRecord[$activePageFileName]);
 
         $accessCheckUrl = "https://" . $server . "/exzact/dataPDF.php?TABLE_NAME=_data$profileId$activePageName&ID=$activeRecordId&PAGE_ID=$activePageId&USERNAME=$username&PASSWORD=$password";
 
