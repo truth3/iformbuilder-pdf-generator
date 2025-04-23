@@ -1,9 +1,11 @@
-<?php namespace iForm\Auth;
+<?php
+declare(strict_types=1);
+
+namespace iForm\Auth;
 
 require_once("iFormCurl.php");
-
 require_once("JWT.php");
-use iForm\Auth\iFormCurl;
+
 /**
  * @category Authentication
  * @package  iForm\Authentication
@@ -16,38 +18,47 @@ class iFormTokenResolver {
      *
      * @var int
      */
-    private static $exp = 600;
+    private static int $exp = 600;
+    
     /**
      * Credentials - secret.  See instructions for acquiring credentials
      *
      * @var string
      */
-    private $secret;
+    private string $secret;
+    
     /**
      * Credentials - client key.  See instructions for acquiring credentials
      *
      * @var string
      */
-    private $client;
+    private string $client;
+    
     /**
      * oAuth - https://ServerName.iformbuilder.com/exzact/api/oauth/token
      *
      * @var string
      */
-    private $endpoint;
+    private string $endpoint;
+    
+    /**
+     * HTTP Request handler
+     * 
+     * @var iFormCurl
+     */
+    private iFormCurl $request;
+    
     /**
      * @param string $url
      * @param string $client
      * @param string $secret
-     * @param null   $requester Can pass mock or dummy object for unit testing
-     *
-     * @throws \Exception
+     * @param iFormCurl|null $requester Can pass mock or dummy object for unit testing
      */
-    function __construct($url, $client, $secret, $requester = null)
+    public function __construct(string $url, string $client, string $secret, ?iFormCurl $requester = null)
     {
         $this->client = $client;
         $this->secret = $secret;
-        $this->request = $requester ?: new iFormCurl();
+        $this->request = $requester ?? new iFormCurl();
         $this->endpoint = trim($url);
     }
 
@@ -57,81 +68,87 @@ class iFormTokenResolver {
      *
      * @return string
      */
-    private function encode($client_key, $client_secret)
+    private function encode(string $client_key, string $client_secret): string
     {
         $iat = time();
-        $payload = array(
+        $payload = [
             "iss" => $client_key,
             "aud" => $this->endpoint,
             "exp" => $iat + self::$exp,
             "iat" => $iat
-        );
+        ];
         return \JWT::encode($payload, $client_secret);
     }
+    
     /**
      * api OAuth endpoint
      *
      * @param string $url
      *
-     * @return boolen
+     * @return bool
      */
-    private function isValid($url)
+    private function isValid(string $url): bool
     {
-        return strpos($url, "exzact/api/oauth/token") !== false;
+        return str_contains($url, "exzact/api/oauth/token");
     }
+    
     /**
      * Set endpoint after check
      *
-     * @param string $url
-     *
      * @throws \Exception
-     * @return null
+     * @return void
      */
-    private function validateEndpoint()
+    private function validateEndpoint(): void
     {
-        if (empty($this->endpoint) || ! $this->isValid($this->endpoint)) {
+        if (empty($this->endpoint) || !$this->isValid($this->endpoint)) {
             throw new \Exception('Invalid url: Valid format https://SERVER_NAME.iformbuilder.com/exzact/api/oauth/token');
         }
     }
+    
     /**
      * Format Params
      *
-     * @return string
+     * @return array
      */
-    private function getParams()
+    private function getParams(): array
     {
-        return array("grant_type" => "urn:ietf:params:oauth:grant-type:jwt-bearer",
-                     "assertion"  => $this->encode($this->client, $this->secret));
+        return [
+            "grant_type" => "urn:ietf:params:oauth:grant-type:jwt-bearer",
+            "assertion" => $this->encode($this->client, $this->secret)
+        ];
     }
+    
     /**
      * Request/get token
      *
      * @return string
      */
-    public function getToken()
+    public function getToken(): string
     {
         try {
             $this->validateEndpoint();
             $params = $this->getParams();
-            $result = $this->check($this->request->post($this->endpoint)
-                                                 ->with($params));
-
-        } catch (Exception $e){
-            $result = $e->getMessage();
+            $response = $this->request->post($this->endpoint)->with($params);
+            return $this->check($response);
+        } catch (\Exception $e) {
+            return $e->getMessage();
         }
-
-        return $result;
     }
+    
     /**
      * Check results
-     * @param $results
+     * 
+     * @param string $results
      *
      * @return string token || error msg
      */
-    private function check($results)
+    private function check(string $results): string
     {
-        $token = json_decode($results, true);
-
-        return isset($token['access_token']) ? $token['access_token'] : $token['error'];
+        try {
+            $token = json_decode($results, true, 512, JSON_THROW_ON_ERROR);
+            return $token['access_token'] ?? $token['error'] ?? 'Unknown error';
+        } catch (\JsonException $e) {
+            return 'Invalid JSON response: ' . $results;
+        }
     }
 }
