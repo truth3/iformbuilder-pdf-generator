@@ -1,4 +1,7 @@
-<?php namespace iForm\Auth;
+<?php
+declare(strict_types=1);
+
+namespace iForm\Auth;
 
 /**
  * Class iFormCurl
@@ -13,65 +16,84 @@ class iFormCurl {
     /**
      * start curl object
      *
-     * @var
+     * @var \CurlHandle|resource|null
      */
     private $ch = null;
 
     /**
      * error
      *
-     * @var null
+     * @var string|null
      */
-    private $error = null;
+    private string|null $error = null;
 
     /**
      * Curl exec
      *
-     * @return mixed
+     * @return string
+     * @throws \RuntimeException
      */
-    private function execute()
+    private function execute(): string
     {
         $results = curl_exec($this->ch);
-        $this->error = curl_error($this->ch);
+        if ($results === false) {
+            $this->error = curl_error($this->ch);
+            $errno = curl_errno($this->ch);
+            curl_close($this->ch);
+            throw new \RuntimeException("cURL request failed: $this->error (Error #$errno)");
+        }
+        
         curl_close($this->ch);
-
         return $results;
     }
 
-
-    public function getError()
+    /**
+     * Get the last curl error
+     * 
+     * @return string|null
+     */
+    public function getError(): ?string
     {
         return $this->error;
     }
 
     /**
-     * init curl
+     * Initialize curl resource
+     * 
+     * @throws \RuntimeException
+     * @return void
      */
-    private function startResource()
+    private function startResource(): void
     {
-        if (! is_null($this->ch)) return;
+        if (!is_null($this->ch)) return;
+        
         $this->ch = curl_init();
+        if ($this->ch === false) {
+            throw new \RuntimeException('Failed to initialize cURL');
+        }
     }
 
     /**
+     * Prepare a POST request
+     *
      * @param string $url
-     * @param array  $params
+     * @param array|null $params
      *
      * @return $this|string
+     * @throws \RuntimeException
      */
-    public function post($url, array $params = null)
+    public function post(string $url, ?array $params = null): mixed
     {
         $this->startResource();
 
-        curl_setopt($this->ch, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($this->ch, CURLOPT_HTTPHEADER, array('Content-type: application/x-www-form-urlencoded'));
+        curl_setopt($this->ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($this->ch, CURLOPT_HTTPHEADER, ['Content-type: application/x-www-form-urlencoded']);
         curl_setopt($this->ch, CURLOPT_URL, $url);
         curl_setopt($this->ch, CURLOPT_POST, true);
 
-        if (! is_null($params)) {
-            $params = http_build_query($params);
-            curl_setopt($this->ch, CURLOPT_POSTFIELDS, $params);
-
+        if ($params !== null) {
+            $encodedParams = http_build_query($params);
+            curl_setopt($this->ch, CURLOPT_POSTFIELDS, $encodedParams);
             return $this->execute();
         } else {
             return $this;
@@ -79,19 +101,20 @@ class iFormCurl {
     }
 
     /**
+     * Add parameters to an existing request
+     *
      * @param array $params passed to method
      *
-     * @throws \Exception
      * @return string
+     * @throws \Exception
      */
-    public function with(array $params)
+    public function with(array $params): string
     {
         if (is_null($this->ch)) {
-            throw new \Exception('Invalid use of method.  Must declare request type before passing parameters');
+            throw new \Exception('Invalid use of method. Must declare request type before passing parameters');
         }
+        
         curl_setopt($this->ch, CURLOPT_POSTFIELDS, http_build_query($params));
-
         return $this->execute();
     }
-
 }
