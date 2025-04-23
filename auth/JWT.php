@@ -1,10 +1,11 @@
 <?php
+declare(strict_types=1);
 
 /**
  * JSON Web Token implementation, based on this spec:
  * http://tools.ietf.org/html/draft-ietf-oauth-json-web-token-06
  *
- * PHP version 5
+ * PHP version 8.4
  *
  * @category Authentication
  * @package  Authentication_JWT
@@ -13,89 +14,99 @@
  * @license  http://opensource.org/licenses/BSD-3-Clause 3-clause BSD
  * @link     https://github.com/firebase/php-jwt
  */
+
+/**
+ * Exception classes for JWT handling
+ */
+class BeforeValidException extends \UnexpectedValueException {}
+class ExpiredException extends \UnexpectedValueException {}
+class SignatureInvalidException extends \UnexpectedValueException {}
+
 class JWT
 {
-    public static $supported_algs = array(
-        'HS256' => array('hash_hmac', 'SHA256'),
-        'HS512' => array('hash_hmac', 'SHA512'),
-        'HS384' => array('hash_hmac', 'SHA384'),
-        'RS256' => array('openssl', 'SHA256'),
-    );
+    public static array $supported_algs = [
+        'HS256' => ['hash_hmac', 'SHA256'],
+        'HS512' => ['hash_hmac', 'SHA512'],
+        'HS384' => ['hash_hmac', 'SHA384'],
+        'RS256' => ['openssl', 'SHA256'],
+    ];
 
     /**
      * Decodes a JWT string into a PHP object.
      *
-     * @param string      $jwt           The JWT
-     * @param string|Array|null $key     The secret key, or map of keys
-     * @param Array       $allowed_algs  List of supported verification algorithms
+     * @param string $jwt The JWT
+     * @param string|array|null $key The secret key or map of keys
+     * @param array $allowed_algs List of supported verification algorithms
      *
-     * @return object      The JWT's payload as a PHP object
+     * @return object The JWT's payload as a PHP object
      *
-     * @throws DomainException              Algorithm was not provided
-     * @throws UnexpectedValueException     Provided JWT was invalid
-     * @throws SignatureInvalidException    Provided JWT was invalid because the signature verification failed
-     * @throws BeforeValidException         Provided JWT is trying to be used before it's eligible as defined by 'nbf'
-     * @throws BeforeValidException         Provided JWT is trying to be used before it's been created as defined by 'iat'
-     * @throws ExpiredException             Provided JWT has since expired, as defined by the 'exp' claim
-     *
-     * @uses jsonDecode
-     * @uses urlsafeB64Decode
+     * @throws \DomainException
+     * @throws \UnexpectedValueException
+     * @throws SignatureInvalidException
+     * @throws BeforeValidException
+     * @throws ExpiredException
      */
-    public static function decode($jwt, $key = null, $allowed_algs = array())
+    public static function decode(string $jwt, string|array|null $key = null, array $allowed_algs = []): object
     {
         $tks = explode('.', $jwt);
         if (count($tks) != 3) {
-            throw new UnexpectedValueException('Wrong number of segments');
+            throw new \UnexpectedValueException('Wrong number of segments');
         }
-        list($headb64, $bodyb64, $cryptob64) = $tks;
-        if (null === ($header = JWT::jsonDecode(JWT::urlsafeB64Decode($headb64)))) {
-            throw new UnexpectedValueException('Invalid header encoding');
+        [$headb64, $bodyb64, $cryptob64] = $tks;
+        
+        $header = self::jsonDecode(self::urlsafeB64Decode($headb64));
+        if ($header === null) {
+            throw new \UnexpectedValueException('Invalid header encoding');
         }
-        if (null === $payload = JWT::jsonDecode(JWT::urlsafeB64Decode($bodyb64))) {
-            throw new UnexpectedValueException('Invalid claims encoding');
+        
+        $payload = self::jsonDecode(self::urlsafeB64Decode($bodyb64));
+        if ($payload === null) {
+            throw new \UnexpectedValueException('Invalid claims encoding');
         }
-        $sig = JWT::urlsafeB64Decode($cryptob64);
+        
+        $sig = self::urlsafeB64Decode($cryptob64);
+        
         if (isset($key)) {
             if (empty($header->alg)) {
-                throw new DomainException('Empty algorithm');
+                throw new \DomainException('Empty algorithm');
             }
             if (empty(self::$supported_algs[$header->alg])) {
-                throw new DomainException('Algorithm not supported');
+                throw new \DomainException('Algorithm not supported');
             }
             if (!is_array($allowed_algs) || !in_array($header->alg, $allowed_algs)) {
-                throw new DomainException('Algorithm not allowed');
+                throw new \DomainException('Algorithm not allowed');
             }
             if (is_array($key)) {
                 if (isset($header->kid)) {
+                    if (!isset($key[$header->kid])) {
+                        throw new \DomainException('"kid" invalid, unable to lookup correct key');
+                    }
                     $key = $key[$header->kid];
                 } else {
-                    throw new DomainException('"kid" empty, unable to lookup correct key');
+                    throw new \DomainException('"kid" empty, unable to lookup correct key');
                 }
             }
 
             // Check the signature
-            if (!JWT::verify("$headb64.$bodyb64", $sig, $key, $header->alg)) {
+            if (!self::verify("$headb64.$bodyb64", $sig, $key, $header->alg)) {
                 throw new SignatureInvalidException('Signature verification failed');
             }
 
-            // Check if the nbf if it is defined. This is the time that the
-            // token can actually be used. If it's not yet that time, abort.
+            // Check nbf (not before) claim
             if (isset($payload->nbf) && $payload->nbf > time()) {
                 throw new BeforeValidException(
-                    'Cannot handle token prior to ' . date(DateTime::ISO8601, $payload->nbf)
+                    'Cannot handle token prior to ' . date(\DateTimeInterface::ISO8601, $payload->nbf)
                 );
             }
 
-            // Check that this token has been created before 'now'. This prevents
-            // using tokens that have been created for later use (and haven't
-            // correctly used the nbf claim).
+            // Check iat (issued at) claim
             if (isset($payload->iat) && $payload->iat > time()) {
                 throw new BeforeValidException(
-                    'Cannot handle token prior to ' . date(DateTime::ISO8601, $payload->iat)
+                    'Cannot handle token prior to ' . date(\DateTimeInterface::ISO8601, $payload->iat)
                 );
             }
 
-            // Check if this token has expired.
+            // Check exp (expiration) claim
             if (isset($payload->exp) && time() >= $payload->exp) {
                 throw new ExpiredException('Expired token');
             }
@@ -108,27 +119,26 @@ class JWT
      * Converts and signs a PHP object or array into a JWT string.
      *
      * @param object|array $payload PHP object or array
-     * @param string       $key     The secret key
-     * @param string       $alg     The signing algorithm. Supported
-     *                              algorithms are 'HS256', 'HS384' and 'HS512'
+     * @param string $key The secret key
+     * @param string $alg The signing algorithm
+     * @param string|null $keyId Optional key identifier
      *
-     * @return string      A signed JWT
-     * @uses jsonEncode
-     * @uses urlsafeB64Encode
+     * @return string A signed JWT
      */
-    public static function encode($payload, $key, $alg = 'HS256', $keyId = null)
+    public static function encode(object|array $payload, string $key, string $alg = 'HS256', ?string $keyId = null): string
     {
-        $header = array('typ' => 'JWT', 'alg' => $alg);
+        $header = ['typ' => 'JWT', 'alg' => $alg];
         if ($keyId !== null) {
             $header['kid'] = $keyId;
         }
-        $segments = array();
-        $segments[] = JWT::urlsafeB64Encode(JWT::jsonEncode($header));
-        $segments[] = JWT::urlsafeB64Encode(JWT::jsonEncode($payload));
+        
+        $segments = [];
+        $segments[] = self::urlsafeB64Encode(self::jsonEncode($header));
+        $segments[] = self::urlsafeB64Encode(self::jsonEncode($payload));
         $signing_input = implode('.', $segments);
 
-        $signature = JWT::sign($signing_input, $key, $alg);
-        $segments[] = JWT::urlsafeB64Encode($signature);
+        $signature = self::sign($signing_input, $key, $alg);
+        $segments[] = self::urlsafeB64Encode($signature);
 
         return implode('.', $segments);
     }
@@ -136,74 +146,66 @@ class JWT
     /**
      * Sign a string with a given key and algorithm.
      *
-     * @param string $msg          The message to sign
+     * @param string $msg The message to sign
      * @param string|resource $key The secret key
-     * @param string $alg       The signing algorithm. Supported algorithms
-     *                               are 'HS256', 'HS384', 'HS512' and 'RS256'
+     * @param string $alg The signing algorithm
      *
-     * @return string          An encrypted message
-     * @throws DomainException Unsupported algorithm was specified
+     * @return string An encrypted message
+     * @throws \DomainException
      */
-    public static function sign($msg, $key, $alg = 'HS256')
+    public static function sign(string $msg, string|resource $key, string $alg = 'HS256'): string
     {
         if (empty(self::$supported_algs[$alg])) {
-            throw new DomainException('Algorithm not supported');
+            throw new \DomainException('Algorithm not supported');
         }
-        list($function, $algorithm) = self::$supported_algs[$alg];
-        switch($function) {
+        
+        [$function, $algorithm] = self::$supported_algs[$alg];
+        
+        switch ($function) {
             case 'hash_hmac':
                 return hash_hmac($algorithm, $msg, $key, true);
             case 'openssl':
                 $signature = '';
                 $success = openssl_sign($msg, $signature, $key, $algorithm);
                 if (!$success) {
-                    throw new DomainException("OpenSSL unable to sign data");
-                } else {
-                    return $signature;
+                    throw new \DomainException("OpenSSL unable to sign data");
                 }
+                return $signature;
+            default:
+                throw new \DomainException("Unknown function $function");
         }
     }
 
     /**
-     * Verify a signature with the mesage, key and method. Not all methods
-     * are symmetric, so we must have a separate verify and sign method.
-     * @param string $msg the original message
-     * @param string $signature
-     * @param string|resource $key for HS*, a string key works. for RS*, must be a resource of an openssl public key
-     * @param string $alg
+     * Verify a signature with the message, key and method.
+     *
+     * @param string $msg The original message
+     * @param string $signature The signature
+     * @param string|resource $key The key
+     * @param string $alg The algorithm
+     *
      * @return bool
-     * @throws DomainException Invalid Algorithm or OpenSSL failure
+     * @throws \DomainException Invalid Algorithm or OpenSSL failure
      */
-    private static function verify($msg, $signature, $key, $alg)
+    private static function verify(string $msg, string $signature, string|resource $key, string $alg): bool
     {
         if (empty(self::$supported_algs[$alg])) {
-            throw new DomainException('Algorithm not supported');
+            throw new \DomainException('Algorithm not supported');
         }
 
-        list($function, $algorithm) = self::$supported_algs[$alg];
-        switch($function) {
+        [$function, $algorithm] = self::$supported_algs[$alg];
+        
+        switch ($function) {
             case 'openssl':
                 $success = openssl_verify($msg, $signature, $key, $algorithm);
-                if (!$success) {
-                    throw new DomainException("OpenSSL unable to verify data: " . openssl_error_string());
-                } else {
-                    return $signature;
+                if ($success === -1) {
+                    throw new \DomainException("OpenSSL unable to verify data: " . openssl_error_string());
                 }
+                return $success === 1;
             case 'hash_hmac':
             default:
                 $hash = hash_hmac($algorithm, $msg, $key, true);
-                if (function_exists('hash_equals')) {
-                    return hash_equals($signature, $hash);
-                }
-                $len = min(self::safeStrlen($signature), self::safeStrlen($hash));
-
-                $status = 0;
-                for ($i = 0; $i < $len; $i++) {
-                    $status |= (ord($signature[$i]) ^ ord($hash[$i]));
-                }
-                $status |= (self::safeStrlen($signature) ^ self::safeStrlen($hash));
-
-                return ($status === 0);
+                return hash_equals($signature, $hash);
         }
     }
 
@@ -212,32 +214,17 @@ class JWT
      *
      * @param string $input JSON string
      *
-     * @return object          Object representation of JSON string
-     * @throws DomainException Provided string was invalid JSON
+     * @return object|null Object representation of JSON string
+     * @throws \DomainException Provided string was invalid JSON
      */
-    public static function jsonDecode($input)
+    public static function jsonDecode(string $input): ?object
     {
-        if (version_compare(PHP_VERSION, '5.4.0', '>=') && !(defined('JSON_C_VERSION') && PHP_INT_SIZE > 4)) {
-            /** In PHP >=5.4.0, json_decode() accepts an options parameter, that allows you
-             * to specify that large ints (like Steam Transaction IDs) should be treated as
-             * strings, rather than the PHP default behaviour of converting them to floats.
-             */
-            $obj = json_decode($input, false, 512, JSON_BIGINT_AS_STRING);
-        } else {
-            /** Not all servers will support that, however, so for older versions we must
-             * manually detect large ints in the JSON string and quote them (thus converting
-             *them to strings) before decoding, hence the preg_replace() call.
-             */
-            $max_int_length = strlen((string) PHP_INT_MAX) - 1;
-            $json_without_bigints = preg_replace('/:\s*(-?\d{'.$max_int_length.',})/', ': "$1"', $input);
-            $obj = json_decode($json_without_bigints);
+        try {
+            $obj = json_decode($input, false, 512, JSON_THROW_ON_ERROR | JSON_BIGINT_AS_STRING);
+        } catch (\JsonException $e) {
+            throw new \DomainException('JSON parse error: ' . $e->getMessage());
         }
-
-        if (function_exists('json_last_error') && $errno = json_last_error()) {
-            JWT::handleJsonError($errno);
-        } elseif ($obj === null && $input !== 'null') {
-            throw new DomainException('Null result with non-null input');
-        }
+        
         return $obj;
     }
 
@@ -246,18 +233,16 @@ class JWT
      *
      * @param object|array $input A PHP object or array
      *
-     * @return string          JSON representation of the PHP object or array
-     * @throws DomainException Provided object could not be encoded to valid JSON
+     * @return string JSON representation of the PHP object or array
+     * @throws \DomainException Provided object could not be encoded to valid JSON
      */
-    public static function jsonEncode($input)
+    public static function jsonEncode(object|array $input): string
     {
-        $json = json_encode($input);
-        if (function_exists('json_last_error') && $errno = json_last_error()) {
-            JWT::handleJsonError($errno);
-        } elseif ($json === 'null' && $input !== null) {
-            throw new DomainException('Null result with non-null input');
+        try {
+            return json_encode($input, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $e) {
+            throw new \DomainException('JSON encode error: ' . $e->getMessage());
         }
-        return $json;
     }
 
     /**
@@ -267,14 +252,14 @@ class JWT
      *
      * @return string A decoded string
      */
-    public static function urlsafeB64Decode($input)
+    public static function urlsafeB64Decode(string $input): string
     {
         $remainder = strlen($input) % 4;
         if ($remainder) {
             $padlen = 4 - $remainder;
             $input .= str_repeat('=', $padlen);
         }
-        return base64_decode(strtr($input, '-_', '+/'));
+        return base64_decode(strtr($input, '-_', '+/'), true) ?: '';
     }
 
     /**
@@ -284,39 +269,18 @@ class JWT
      *
      * @return string The base64 encode of what you passed in
      */
-    public static function urlsafeB64Encode($input)
+    public static function urlsafeB64Encode(string $input): string
     {
         return str_replace('=', '', strtr(base64_encode($input), '+/', '-_'));
     }
 
     /**
-     * Helper method to create a JSON error.
-     *
-     * @param int $errno An error number from json_last_error()
-     *
-     * @return void
-     */
-    private static function handleJsonError($errno)
-    {
-        $messages = array(
-            JSON_ERROR_DEPTH => 'Maximum stack depth exceeded',
-            JSON_ERROR_CTRL_CHAR => 'Unexpected control character found',
-            JSON_ERROR_SYNTAX => 'Syntax error, malformed JSON'
-        );
-        throw new DomainException(
-            isset($messages[$errno])
-                ? $messages[$errno]
-                : 'Unknown JSON error: ' . $errno
-        );
-    }
-
-    /**
      * Get the number of bytes in cryptographic strings.
      *
-     * @param string
+     * @param string $str
      * @return int
      */
-    private static function safeStrlen($str)
+    private static function safeStrlen(string $str): int
     {
         if (function_exists('mb_strlen')) {
             return mb_strlen($str, '8bit');
