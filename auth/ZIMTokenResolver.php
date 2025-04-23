@@ -1,138 +1,138 @@
-<?php namespace iForm\Auth;
+<?php
+
+declare(strict_types=1);
+
+namespace iForm\Auth;
 
 require_once("iFormCurl.php");
-
 require_once("JWT.php");
-use iForm\Auth\iFormCurl;
+
 /**
+ * ZIMTokenResolver - Handles authentication via JWT and OAuth token retrieval
+ * 
  * @category Authentication
  * @package  iForm\Authentication
  * @author   Seth Salinas <ssalinas@zerionsoftware.com>
  * @license  http://opensource.org/licenses/MIT
  */
-class ZIMTokenResolver {
+class ZIMTokenResolver
+{
     /**
-     * This value has a maximum of 10 minutes
-     *
-     * @var int
+     * Maximum token expiration time in seconds (10 minutes)
      */
-    private static $exp = 600;
+    private const MAX_EXPIRATION = 600;
+
     /**
-     * Credentials - secret.  See instructions for acquiring credentials
-     *
-     * @var string
+     * Authentication endpoint URL
      */
-    private $secret;
+    private readonly string $endpoint;
+
     /**
-     * Credentials - client key.  See instructions for acquiring credentials
-     *
-     * @var string
+     * HTTP request handler
      */
-    private $client;
+    private readonly iFormCurl $request;
+
     /**
-     * oAuth - https://ServerName.iformbuilder.com/exzact/api/oauth/token
-     *
-     * @var string
+     * Initialize token resolver with required credentials
+     * 
+     * @param string $url OAuth endpoint URL
+     * @param string $client Client key identifier
+     * @param string $secret Client secret
+     * @param ?iFormCurl $requester Optional requester for testing
+     * 
+     * @throws \Exception If parameters are invalid
      */
-    private $endpoint;
-    /**
-     * @param string $url
-     * @param string $client
-     * @param string $secret
-     * @param null   $requester Can pass mock or dummy object for unit testing
-     *
-     * @throws \Exception
-     */
-    function __construct($url, $client, $secret, $requester = null)
-    {
-        $this->client = $client;
-        $this->secret = $secret;
-        $this->request = $requester ?: new iFormCurl();
+    public function __construct(
+        string $url,
+        private readonly string $client,
+        private readonly string $secret,
+        ?iFormCurl $requester = null
+    ) {
         $this->endpoint = trim($url);
+        $this->request = $requester ?? new iFormCurl();
     }
 
     /**
-     * @param string $client_key
-     * @param string $client_secret
-     *
-     * @return string
+     * Generate JWT encoded assertion
+     * 
+     * @return string The encoded JWT assertion
      */
-
-    private function encode($client_key, $client_secret)
+    private function generateAssertion(): string
     {
         $iat = time();
-        $payload = array(
-            "iss" => $client_key,
+        $payload = [
+            "iss" => $this->client,
             "aud" => $this->endpoint,
-            "exp" => $iat + self::$exp,
+            "exp" => $iat + self::MAX_EXPIRATION,
             "iat" => $iat
-        );
-        return \JWT::encode($payload, $client_secret);
+        ];
+        
+        return \JWT::encode($payload, $this->secret);
     }
+
     /**
-     * api OAuth endpoint
-     *
-     * @param string $url
-     *
-     * @return boolen
+     * Validate if URL is a proper OAuth endpoint
+     * 
+     * @param string $url The URL to validate
+     * @return bool True if valid OAuth endpoint
      */
-    private function isValid($url)
+    private function isValidEndpoint(string $url): bool
     {
-        return strpos($url, "/oauth2/token") !== false;
+        return str_contains($url, "/oauth2/token");
     }
+
     /**
-     * Set endpoint after check
-     *
-     * @param string $url
-     *
-     * @throws \Exception
-     * @return null
+     * Validate the endpoint URL
+     * 
+     * @throws \Exception If endpoint URL is invalid
      */
-    private function validateEndpoint()
+    private function validateEndpoint(): void
     {
-        if (empty($this->endpoint) || ! $this->isValid($this->endpoint)) {
+        if (empty($this->endpoint) || !$this->isValidEndpoint($this->endpoint)) {
             throw new \Exception('Invalid url: Valid format https://SERVER_NAME.zerionsoftware.com/zim/oauth/token');
         }
     }
+
     /**
-     * Format Params
-     *
-     * @return string
+     * Get OAuth request parameters
+     * 
+     * @return array<string, string> OAuth parameters
      */
-    private function getParams()
+    private function getRequestParams(): array
     {
-        return array("grant_type" => "urn:ietf:params:oauth:grant-type:jwt-bearer",
-                     "assertion"  => $this->encode($this->client, $this->secret));
+        return [
+            "grant_type" => "urn:ietf:params:oauth:grant-type:jwt-bearer",
+            "assertion"  => $this->generateAssertion()
+        ];
     }
+
     /**
-     * Request/get token
-     *
-     * @return string
+     * Request and get the authentication token
+     * 
+     * @return string The access token or error message
      */
-    public function getToken()
+    public function getToken(): string
     {
         try {
             $this->validateEndpoint();
-            $params = $this->getParams();
-            $result = $this->check($this->request->post($this->endpoint)
-                                                 ->with($params));
-
-        } catch (Exception $e){
-            $result = $e->getMessage();
+            $params = $this->getRequestParams();
+            $response = $this->request->post($this->endpoint)->with($params);
+            return $this->parseResponse($response);
+        } catch (\Exception $e) {
+            return $e->getMessage();
         }
-
-        return $result;
     }
-    /**
-     * Check results
-     * @param $results
-     *
-     * @return string token || error msg
-     */
-    private function check($results)
-    {
-        $token = json_decode($results, true);
 
-        return isset($token['access_token']) ? $token['access_token'] : $token['error'];
+    /**
+     * Parse and extract token from response
+     * 
+     * @param string $response The API response
+     * @return string Access token or error message
+     */
+    private function parseResponse(string $response): string
+    {
+        $data = json_decode($response, true) ?? [];
+        
+        return $data['access_token'] ?? $data['error'] ?? 'Unknown response format';
     }
 }
